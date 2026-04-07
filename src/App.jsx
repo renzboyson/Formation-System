@@ -33,10 +33,17 @@ function App() {
   // Initialize Supabase Auth & Data
   useEffect(() => {
     const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await fetchProfile(session.user.id);
-      } else {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) console.error("Session error:", error);
+        
+        if (session) {
+          await fetchProfile(session.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Unexpected error in fetchSession:", err);
         setLoading(false);
       }
     };
@@ -70,11 +77,16 @@ function App() {
   }, [currentUser]);
 
   const fetchProfile = async (userId) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (!error && data) {
-      setCurrentUser(data);
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (!error && data) {
+        setCurrentUser(data);
+      }
+    } catch (err) {
+      console.error("Unexpected error fetching profile:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchAllProfiles = async () => {
