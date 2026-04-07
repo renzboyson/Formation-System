@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { subMonths } from 'date-fns';
+import { supabase } from './lib/supabase';
 
 import Layout from './components/Layout';
 import UserDashboard from './pages/user/UserDashboard';
@@ -15,7 +15,6 @@ import AdminBreakdown from './pages/admin/AdminBreakdown';
 
 import Landing from './pages/Landing';
 
-// Exported contexts and data shared globally
 export const AppContext = createContext();
 
 export const FORMATIONS = [
@@ -26,74 +25,121 @@ export const FORMATIONS = [
 ];
 
 function App() {
-  // Persistent State via LocalStorage Initialization
-  const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem('sca_currentUser');
-    return saved ? JSON.parse(saved) : null;
-  });
-  
-  const [registeredUsers, setRegisteredUsers] = useState(() => {
-    const saved = localStorage.getItem('sca_registeredUsers');
-    return saved ? JSON.parse(saved) : [{
-       name: "System Administrator",
-       chapter: "Headquarters",
-       role: "admin",
-       username: "admin",
-       password: "password123"
-    }];
-  });
-  
-  const [activities, setActivities] = useState(() => {
-    const saved = localStorage.getItem('sca_activities');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [registeredUsers, setRegisteredUsers] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Keep state synced with localStorage
+  // Initialize Supabase Auth & Data
   useEffect(() => {
-    localStorage.setItem('sca_currentUser', JSON.stringify(currentUser));
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await fetchProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    };
+    
+    fetchSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        await fetchProfile(session.user.id);
+      } else {
+        setCurrentUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Fetch all users and activities when an admin logs in, or just activities for a regular user
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.role === 'admin') {
+        fetchAllProfiles();
+        fetchAllActivities();
+      } else {
+        fetchUserActivities(currentUser.username);
+      }
+    }
   }, [currentUser]);
 
-  useEffect(() => {
-    localStorage.setItem('sca_registeredUsers', JSON.stringify(registeredUsers));
-  }, [registeredUsers]);
-
-  useEffect(() => {
-    localStorage.setItem('sca_activities', JSON.stringify(activities));
-  }, [activities]);
-
-  const addActivity = (activity) => {
-    setActivities([...activities, activity]);
+  const fetchProfile = async (userId) => {
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (!error && data) {
+      setCurrentUser(data);
+    }
+    setLoading(false);
   };
 
-  const completeActivity = (id) => {
-    setActivities(activities.map(a =>
-      a.id === id ? { ...a, status: 'completed' } : a
-    ));
+  const fetchAllProfiles = async () => {
+    const { data } = await supabase.from('profiles').select('*');
+    if (data) setRegisteredUsers(data);
   };
 
-  const updateActivityStatus = (id, newStatus) => {
-    if (newStatus === 'rejected') {
-      cancelActivity(id);
-    } else {
-      setActivities(activities.map(a =>
-        a.id === id ? { ...a, status: newStatus } : a
-      ));
+  const fetchAllActivities = async () => {
+    const { data } = await supabase.from('activities').select('*');
+    if (data) setActivities(data);
+  };
+
+  const fetchUserActivities = async (username) => {
+    const { data } = await supabase.from('activities').select('*').eq('username', username);
+    if (data) setActivities(data);
+  };
+
+  const addActivity = async (activity) => {
+    const { data, error } = await supabase.from('activities').insert([activity]).select();
+    if (data) {
+      setActivities([...activities, data[0]]);
     }
   };
 
-  const cancelActivity = (id) => {
+  const completeActivity = async (id) => {
+    const { data } = await supabase.from('activities').update({ status: 'completed' }).eq('id', id).select();
+    if (data) {
+      setActivities(activities.map(a => a.id === id ? data[0] : a));
+    }
+  };
+
+  const updateActivityStatus = async (id, newStatus) => {
+    if (newStatus === 'rejected') {
+      await cancelActivity(id);
+    } else {
+      const { data } = await supabase.from('activities').update({ status: newStatus }).eq('id', id).select();
+      if (data) {
+        setActivities(activities.map(a => a.id === id ? data[0] : a));
+      }
+    }
+  };
+
+  const cancelActivity = async (id) => {
+    await supabase.from('activities').delete().eq('id', id);
     setActivities(activities.filter(a => a.id !== id));
   };
 
-  const deleteUser = (username) => {
+  const deleteUser = async (username) => {
     const userToDelete = registeredUsers.find(u => u.username === username);
+    if (!userToDelete) return;
+    
+    // Deleting from auth.users (requires service role, so typically users just get disabled, but here we can delete profile via SQL or just delete from profiles if RLS allows it; wait, delete from profiles)
+    await supabase.from('profiles').delete().eq('id', userToDelete.id);
     setRegisteredUsers(registeredUsers.filter(u => u.username !== username));
     
+    fetchActivitiesAfterUserDelete(username, userToDelete);
+  };
+
+  const fetchActivitiesAfterUserDelete = async (username, userToDelete) => {
+    // Cascade delete on activities should do this, but just update state locally
     if (userToDelete) {
       setActivities(activities.filter(a => {
         if (a.username) return a.username !== username;
         if (a.schoolName && userToDelete.school) return a.schoolName !== userToDelete.school;
-        return a.userName !== userToDelete.name;
+        return a.userName !== userToDelete.full_name;
       }));
     } else {
       setActivities(activities.filter(a => a.username !== username));
@@ -106,42 +152,38 @@ function App() {
     if (formationId === 'pcm-ltw') return isCompleted('escapade');
     if (formationId === 'bow') return isCompleted('escapade') && isCompleted('pcm-ltw');
     if (formationId === 'scale') return isCompleted('escapade') && isCompleted('pcm-ltw') && isCompleted('bow');
-    return true; // Default fallback for unknown formations
+    return true; 
   };
 
-  const approveUser = (username) => {
-    setRegisteredUsers(registeredUsers.map(u => 
-      u.username === username ? { ...u, status: 'approved' } : u
-    ));
-  };
-
-  const rejectUser = (username) => {
-    setRegisteredUsers(registeredUsers.filter(u => u.username !== username));
-  };
-
-  const registerUser = (userData) => {
-    const newUser = { ...userData, status: 'pending' };
-    setRegisteredUsers([...registeredUsers, newUser]);
-    return newUser; // Do not auto-login
-  };
-
-  const attemptLogin = (username, password) => {
-    const user = registeredUsers.find(u => u.username === username && u.password === password);
-    if (user) {
-      if (user.status === 'pending') {
-        return { success: false, message: "Your account is still waiting for Administrator approval. Please wait." };
-      }
-      setCurrentUser(user);
-      return { success: true };
+  const approveUser = async (username) => {
+    const { data } = await supabase.from('profiles').update({ status: 'approved' }).eq('username', username).select();
+    if (data) {
+      setRegisteredUsers(registeredUsers.map(u => u.username === username ? data[0] : u));
     }
-    return { success: false, message: "Invalid username or password, or account does not exist." };
   };
 
-  const logout = () => {
+  const rejectUser = async (username) => {
+    // Delete their profile
+    const user = registeredUsers.find(u => u.username === username);
+    if (user) {
+       await supabase.from('profiles').delete().eq('id', user.id);
+       setRegisteredUsers(registeredUsers.filter(u => u.username !== username));
+    }
+  };
+
+  // Deprecated since Landing uses Supabase directly now, but keeping dummy for compatibility until Landing.jsx is updated
+  const registerUser = () => {}; 
+  const attemptLogin = () => {}; 
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setCurrentUser(null);
   };
 
-  // Sanitize trailing orphaned activities from older system iterations
+  if (loading) {
+    return <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f8fafc', color: '#1e293b'}}>Loading SCA Scheduling System...</div>;
+  }
+
   const validActivities = activities.filter(a => 
     registeredUsers.some(u => 
         (a.username && a.username === u.username) || 
@@ -153,7 +195,7 @@ function App() {
     <AppContext.Provider value={{ 
         currentUser, registerUser, attemptLogin, registeredUsers, deleteUser,
         approveUser, rejectUser,
-        logout, activities: validActivities, addActivity, completeActivity, cancelActivity, 
+        logout, activities: currentUser && currentUser.role === 'admin' ? validActivities : activities, addActivity, completeActivity, cancelActivity, 
         updateActivityStatus, isEligible 
     }}>
       <BrowserRouter>

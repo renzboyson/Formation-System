@@ -42,7 +42,7 @@ export default function AdminUnits() {
                   <tr key={i} style={{ transition: 'all 0.2s' }}>
                     <td style={{ padding: '1rem', borderBottom: '1px solid #fecaca', color: '#7f1d1d' }}>{u.chapter || 'N/A'}</td>
                     <td style={{ padding: '1rem', borderBottom: '1px solid #fecaca', fontWeight: 600, color: '#7f1d1d' }}>{u.school || 'N/A'}</td>
-                    <td style={{ padding: '1rem', borderBottom: '1px solid #fecaca', color: '#7f1d1d' }}>{u.name || 'N/A'}</td>
+                    <td style={{ padding: '1rem', borderBottom: '1px solid #fecaca', color: '#7f1d1d' }}>{u.full_name || 'N/A'}</td>
                     <td style={{ padding: '1rem', borderBottom: '1px solid #fecaca', textAlign: 'right' }}>
                         <button onClick={() => approveUser(u.username)} style={{ background: '#10b981', color: 'white', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', marginRight: '0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', transition: 'filter 0.1s' }} onMouseOver={e=>e.currentTarget.style.filter='brightness(1.1)'} onMouseOut={e=>e.currentTarget.style.filter='none'}><CheckCircle size={16} /> Approve</button>
                         <button onClick={() => { if(window.confirm('Are you sure you want to reject this account?')) rejectUser(u.username); }} style={{ background: 'white', color: '#ef4444', border: '1px solid #ef4444', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', transition: 'background 0.1s' }} onMouseOver={e=>e.currentTarget.style.background='#fef2f2'} onMouseOut={e=>e.currentTarget.style.background='white'}><XCircle size={16} /> Reject</button>
@@ -75,7 +75,7 @@ export default function AdminUnits() {
                 <tr key={i} className="hover:bg-gray-50" style={{ transition: 'all 0.2s' }}>
                   <td style={{ padding: '1rem', borderBottom: '1px solid var(--pk-border)', color: 'var(--pk-text-muted)' }}>{u.chapter || 'N/A'}</td>
                   <td style={{ padding: '1rem', borderBottom: '1px solid var(--pk-border)', fontWeight: 600, color: 'var(--pk-text-main)' }}>{u.school || 'N/A'}</td>
-                  <td style={{ padding: '1rem', borderBottom: '1px solid var(--pk-border)', color: 'var(--pk-text-muted)' }}>{u.name || 'N/A'}</td>
+                  <td style={{ padding: '1rem', borderBottom: '1px solid var(--pk-border)', color: 'var(--pk-text-muted)' }}>{u.full_name || 'N/A'}</td>
                 </tr>
               ))}
               {unitAccounts.length === 0 && (

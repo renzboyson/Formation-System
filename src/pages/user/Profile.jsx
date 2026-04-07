@@ -31,7 +31,7 @@ export default function Profile() {
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(80px, max-content) 1fr minmax(100px, max-content) 1fr', gap: '1rem', fontSize: '1.1rem', alignItems: 'end' }}>
                   <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'end', width: '100%' }}>
                       <span style={{ paddingRight: '0.5rem' }}>Name :</span>
-                      <span style={{ borderBottom: '1px solid black', flex: 1, paddingLeft: '0.5rem', paddingBottom: '2px', fontWeight: 'bold' }}>{currentUser.name}</span>
+                      <span style={{ borderBottom: '1px solid black', flex: 1, paddingLeft: '0.5rem', paddingBottom: '2px', fontWeight: 'bold' }}>{currentUser.full_name}</span>
                   </div>
                   <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'end', width: '100%', paddingLeft: '1rem' }}>
                       <span style={{ paddingRight: '0.5rem' }}>Nick Name:</span>

@@ -1,8 +1,7 @@
-import React, { useState, useContext, useEffect } from 'react';
-import { AppContext } from '../App';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 export default function Landing() {
-  const { registerUser, attemptLogin, registeredUsers } = useContext(AppContext);
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState('');
   const [pendingUsername, setPendingUsername] = useState(null);
@@ -22,75 +21,114 @@ export default function Landing() {
 
   const clearError = () => setError('');
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     clearError();
     if (!loginForm.username || !loginForm.password) return setError('Please fill in all required fields');
     
-    const result = attemptLogin(loginForm.username, loginForm.password);
-    if (!result.success) {
-      setError(result.message);
+    // In our implementation, we use the "email" field of Supabase auth with a fake email if they use username. 
+    // Let's coerce username to a formatted email to use Supabase Auth easily:
+    const email = `${loginForm.username.replace(/\s+/g, '').toLowerCase()}@system.sca.com`;
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: loginForm.password,
+    });
+
+    if (error) {
+        return setError(error.message);
     }
+
+    if (data.session) {
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.session.user.id).single();
+        if (profile) {
+            if (profile.status === 'Pending' || profile.status === 'pending') {
+                await supabase.auth.signOut();
+                setError("Your account is still waiting for Administrator approval. Please wait.");
+            }
+        }
+    }
+  };
+
+  const checkPendingApproval = async () => {
+     if (!pendingUsername) return;
+     const { data } = await supabase.from('profiles').select('status').eq('username', pendingUsername).single();
+     if (data) {
+         if (data.status === 'approved') {
+             setPendingUsername(null);
+             // Auto-login logic could go here, but for security, usually they have to login again. Let's auto-login:
+             const email = `${pendingUsername.replace(/\s+/g, '').toLowerCase()}@system.sca.com`;
+             await supabase.auth.signInWithPassword({ email: email, password: signupForm.password });
+         }
+         else if (data.status === 'rejected') {
+             setPendingUsername(null);
+             setError("Your registration request was rejected by the Admin.");
+         }
+     } else {
+         // Profile deleted meaning rejected
+         setPendingUsername(null);
+         setError("Your registration request was rejected by the Admin.");
+     }
   };
 
   useEffect(() => {
     let interval;
     if (pendingUsername) {
       interval = setInterval(() => {
-        const users = JSON.parse(localStorage.getItem('sca_registeredUsers') || '[]');
-        const pUser = users.find(u => u.username === pendingUsername);
-        
-        if (pUser && pUser.status === 'approved') {
-          // Automatic login triggered!
-          setPendingUsername(null);
-          attemptLogin(pUser.username, pUser.password);
-        } else if (!pUser) {
-           setPendingUsername(null);
-           setError("Your registration request was rejected by the Admin.");
-        }
-      }, 2000);
+        checkPendingApproval();
+      }, 3000);
     }
     return () => clearInterval(interval);
-  }, [pendingUsername, attemptLogin]);
+  }, [pendingUsername]);
 
-  const handleSignupSubmit = (e) => {
+  const handleSignupSubmit = async (e) => {
     e.preventDefault();
     clearError();
     const sf = signupForm;
     if (!sf.name || !sf.chapter || !sf.school || !sf.username || !sf.password) {
       return setError("Please fill up all required fields.");
     }
+
+    const email = `${sf.username.replace(/\s+/g, '').toLowerCase()}@system.sca.com`;
     
-    // Check if username is already taken
-    const exists = registeredUsers.some(u => u.username === sf.username);
-    if (exists) {
-      return setError("That username is already taken. Please choose another one.");
+    // Call Supabase SignUp. The trigger handles pushing into 'profiles'.
+    const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: sf.password,
+        options: {
+            data: {
+                full_name: sf.name,
+                school: sf.school,
+                chapter: `Chapter ${sf.chapter.replace(/\D/g, '')}`,
+                role: 'SCA President'
+            }
+        }
+    });
+
+    if (error) {
+        return setError(error.message);
     }
 
-    registerUser({
-      name: sf.name,
-      nickName: sf.nickName,
-      address: sf.address,
-      email: sf.email,
-      mobile: sf.mobile,
-      birthdate: sf.birthdate,
-      school: sf.school,
-      chapter: `Chapter ${sf.chapter.replace(/\D/g, '')}`, // Strips out everything except digits
-      yearsPresident: sf.yearsPresident,
-      yearsSCAn: sf.yearsSCAn,
-      involvements: sf.involvements,
-      qualities: sf.qualities,
-      role: "SCA President",
-      username: sf.username,
-      password: sf.password
-    });
+    // Now manually update additional profile data (qualities, involvements, username)
+    if (data.user) {
+        await supabase.from('profiles').update({
+            username: sf.username,
+            nickname: sf.nickName,
+            address: sf.address,
+            email: sf.email, // Actual real email from form
+            mobile: sf.mobile,
+            birthdate: sf.birthdate,
+            years_president: sf.yearsPresident,
+            years_scan: sf.yearsSCAn,
+            involvements: sf.involvements,
+            qualities: sf.qualities,
+        }).eq('id', data.user.id);
+    }
 
     setPendingUsername(sf.username);
     setIsLogin(true);
     setLoginForm({ username: sf.username, password: sf.password });
   };
-
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <div className="landing-page" style={{ 
@@ -104,9 +142,6 @@ export default function Landing() {
        '--border-color': 'var(--pk-border)',
        '--font-family': "'Inter', sans-serif"
     }}>
-        <style>{`
-          
-        `}</style>
         <header className="landing-global-header">
             <div className="container header-container">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>

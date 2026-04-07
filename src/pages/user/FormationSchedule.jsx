@@ -166,7 +166,7 @@ export default function FormationSchedule() {
       icon: formation.id,
       date: selectedDate.toISOString(),
       status: 'pending',
-      userName: currentUser.name,
+      userName: currentUser.full_name,
       schoolName: currentUser.school,
       username: currentUser.username,
       approvalLetter: approvalImage

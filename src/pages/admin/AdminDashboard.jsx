@@ -67,7 +67,7 @@ export default function AdminDashboard() {
               <tbody>
                  {registeredUsers.map((user, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--pk-border)' }}>
-                        <td style={{ padding: '1rem', color: 'var(--pk-text-main)', fontWeight: 500 }}>{user.name}</td>
+                        <td style={{ padding: '1rem', color: 'var(--pk-text-main)', fontWeight: 500 }}>{user.full_name}</td>
                         <td style={{ padding: '1rem', color: 'var(--pk-text-muted)' }}>{user.chapter || 'SCA Admin Team'}</td>
                         <td style={{ padding: '1rem' }}>
                            <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, backgroundColor: user.role === 'admin' ? '#f3e8ff' : '#f0f9ff', color: user.role === 'admin' ? '#7e22ce' : '#0369a1' }}>
