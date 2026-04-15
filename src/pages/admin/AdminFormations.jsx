@@ -1,4 +1,5 @@
 import React, { useContext, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppContext } from '../../App';
 import { Check, X, CheckCircle, Activity, FileImage, Clock } from 'lucide-react';
 import { format, isBefore, startOfDay } from 'date-fns';
@@ -6,7 +7,14 @@ import { format, isBefore, startOfDay } from 'date-fns';
 export default function AdminFormations() {
     const { activities, updateActivityStatus } = useContext(AppContext);
     const [previewImage, setPreviewImage] = useState(null);
+    const [searchParams] = useSearchParams();
+    const currentTab = searchParams.get('tab');
+
     const pendingActivities = activities.filter(a => a.status === 'pending');
+    
+    // Determine visibility based on tab parameter, defaulting to 'pending'
+    const showPending = !currentTab || currentTab === 'pending';
+    const showApproved = currentTab === 'approved';
 
     return (
         <div className="animation-fade-in" style={{ padding: '0 1rem' }}>
@@ -22,6 +30,7 @@ export default function AdminFormations() {
                 </h2>
 
                 {/* Pending Formation Schedules */}
+                {showPending && (
                 <div style={{ marginBottom: '3rem' }}>
                     <h3 style={{ color: 'var(--pk-blue-700)', marginBottom: '1rem', fontSize: '1.25rem', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem' }}>
                         Pending Formation Schedules
@@ -78,8 +87,10 @@ export default function AdminFormations() {
                         </div>
                     )}
                 </div>
+                )}
 
                 {/* Active & Approved Formations */}
+                {showApproved && (
                 <div>
                     <h3 style={{ color: '#047857', marginBottom: '1rem', fontSize: '1.25rem', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <CheckCircle size={22} />
@@ -122,6 +133,7 @@ export default function AdminFormations() {
                         </div>
                     )}
                 </div>
+                )}
             </section>
 
             {/* Image Preview Modal */}
